@@ -1,0 +1,17 @@
+crewai[tools]>=1.9.0,<2.0.0
+anthropic>=0.39.0
+httpx<0.28.0
+fastapi>=0.115.0
+uvicorn>=0.31.1
+jinja2>=3.1.4
+python-multipart>=0.0.12
+google-genai>=1.0.0
+Pillow>=10.0.0
+tweepy>=4.14.0
+requests>=2.31.0
+atproto>=0.0.46
+praw>=7.7.0
+sendgrid>=6.11.0
+supabase>=2.0.0
+apscheduler>=3.10.0
+python-dotenv>=1.0.0

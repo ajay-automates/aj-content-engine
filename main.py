@@ -17,7 +17,12 @@ campaigns = []
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "campaigns": campaigns})
+    """Serve the main UI. Injects the Shorts module script automatically."""
+    resp = templates.TemplateResponse("index.html", {"request": request, "campaigns": campaigns})
+    # Inject shorts module script tag before </body>
+    body = resp.body.decode("utf-8")
+    body = body.replace("</body>", '<script src="/api/shorts/inject.js"></script>\n</body>')
+    return HTMLResponse(content=body)
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
@@ -59,75 +64,38 @@ async def generate_shorts_ideas_get():
     except Exception as e:
         return JSONResponse({"error": str(e), "shorts": []}, status_code=500)
 
-@app.get("/api/shorts/inject.js")
-async def shorts_inject_js():
-    """Serve the Shorts UI module as a self-contained JS file.
-    Include via <script src="/api/shorts/inject.js"></script> at bottom of index.html.
-    Auto-injects CSS, HTML section, and JS logic for the Shorts Ideas row."""
-    js = r"""
+SHORTS_INJECT_JS = r"""
 (function(){
-/* === SHORTS CSS === */
 var css=document.createElement('style');
 css.textContent='.shorts-section{padding:20px 0 10px;position:relative;z-index:3}.shorts-section .section-title{color:var(--accent-secondary)}.shorts-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.6rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-left:8px}.badge-drama{background:rgba(229,9,20,.15);color:var(--accent)}.badge-free_resource{background:rgba(0,212,255,.15);color:var(--accent-secondary)}.badge-tool_discovery{background:rgba(139,92,246,.15);color:#a78bfa}.badge-competition{background:rgba(251,146,60,.15);color:#fb923c}.badge-secret_leak{background:rgba(244,63,94,.15);color:#f43f5e}.badge-how_to{background:rgba(34,197,94,.15);color:#22c55e}.badge-career{background:rgba(59,130,246,.15);color:#3b82f6}.badge-mind_blown{background:rgba(168,85,247,.15);color:#a855f7}.shorts-card .card-title{font-size:1.05rem;line-height:1.3}.shorts-card .card-body{padding:18px 20px}.shorts-original{font-size:.7rem;color:var(--text-muted);margin-top:6px;font-style:italic;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}.btn-shorts-refresh{padding:6px 16px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text-muted);font-size:.75rem;cursor:pointer;font-family:inherit;transition:all .2s}.btn-shorts-refresh:hover{border-color:var(--accent-secondary);color:var(--accent-secondary)}';
 document.head.appendChild(css);
-
-/* === SHORTS HTML SECTION — injected before feedContainer === */
 var feed=document.getElementById('feedContainer');
-if(feed){
-  var sec=document.createElement('div');
-  sec.id='shortsSection';
-  feed.parentNode.insertBefore(sec,feed);
-}
-
-/* === SHORTS LOADER === */
+if(feed){var sec=document.createElement('div');sec.id='shortsSection';feed.parentNode.insertBefore(sec,feed)}
 async function loadShortsIdeas(){
-  var c=document.getElementById('shortsSection');
-  if(!c)return;
+  var c=document.getElementById('shortsSection');if(!c)return;
   c.innerHTML='<div class="shorts-section"><div class="section-header"><div class="section-title"><span class="icon">\uD83C\uDFAC</span> SHORTS IDEAS <span class="count">AI-rewritten</span></div><button class="btn-shorts-refresh" onclick="window._loadShorts()">\u21BB Refresh</button></div><div class="scroll-row" id="shortsRow">'+Array(5).fill('<div class="skeleton skeleton-card"></div>').join('')+'</div></div>';
-  try{
-    var r=await fetch('/api/shorts/generate');
-    var d=await r.json();
+  try{var r=await fetch('/api/shorts/generate');var d=await r.json();
     if(d.shorts&&d.shorts.length>0){renderShortsRow(d.shorts)}
-    else{document.getElementById('shortsRow').innerHTML='<div style="padding:30px;color:var(--text-muted);font-size:.9rem">Shorts ideas loading... trending feed may still be warming up. Click Refresh in a moment.</div>'}
-  }catch(e){
-    console.error('Shorts error:',e);
-    var row=document.getElementById('shortsRow');
-    if(row)row.innerHTML='<div style="padding:30px;color:var(--text-muted);font-size:.9rem">Could not load shorts ideas. Click Refresh to retry.</div>';
-  }
+    else{document.getElementById('shortsRow').innerHTML='<div style="padding:30px;color:var(--text-muted);font-size:.9rem">Shorts ideas loading\u2026 Click Refresh in a moment.</div>'}
+  }catch(e){console.error('Shorts error:',e);var row=document.getElementById('shortsRow');if(row)row.innerHTML='<div style="padding:30px;color:var(--text-muted);font-size:.9rem">Could not load shorts ideas. Click Refresh to retry.</div>'}
 }
-
 function renderShortsRow(shorts){
-  var row=document.getElementById('shortsRow');
-  if(!row)return;
+  var row=document.getElementById('shortsRow');if(!row)return;
   row.innerHTML=shorts.map(function(s,i){
     var bc={'drama':'badge-drama','free_resource':'badge-free_resource','tool_discovery':'badge-tool_discovery','competition':'badge-competition','secret_leak':'badge-secret_leak','how_to':'badge-how_to','career':'badge-career','mind_blown':'badge-mind_blown'}[s.hook_type]||'badge-drama';
     var ht=s.hook_type?s.hook_type.replace(/_/g,' '):'';
     var pe=['\uD83C\uDFAC','\uD83D\uDCF1','\u26A1','\uD83D\uDD25','\uD83D\uDCA1','\uD83D\uDE80','\uD83E\uDDE0','\uD83C\uDFAF'][i%8];
-    return '<div class="topic-card shorts-card" style="animation:fadeSlide .4s ease '+i*.06+'s both;flex:0 0 360px">'+
-      '<div class="card-image"><div class="placeholder">'+pe+'</div><div class="card-gradient"></div>'+
-      '<div class="card-source-badge" style="background:rgba(0,212,255,.2);color:var(--accent-secondary);border:1px solid rgba(0,212,255,.3)">\uD83C\uDFAC SHORTS IDEA</div>'+
-      (ht?'<div class="card-score"><span class="shorts-badge '+bc+'">'+ht+'</span></div>':'')+
-      '</div><div class="card-body">'+
-      '<div class="card-title">'+escHtml(s.title)+'</div>'+
-      '<div class="card-meta"><span>'+(s.time_ago||'Recent')+'</span><span>'+(s.source_name||s.source||'')+'</span></div>'+
-      '<div class="card-why">'+escHtml(s.angle||s.why_trending||'')+'</div>'+
-      (s.original_title?'<div class="shorts-original">\u2190 '+escHtml(s.original_title)+'</div>':'')+
-      '<div class="card-actions">'+
-      '<button class="btn-card btn-campaign" onclick="event.stopPropagation();generate(\''+escAttr(s.title)+'\')">\u26A1 Generate</button>'+
-      '<button class="btn-card btn-video" onclick="event.stopPropagation();openVideoPicker(\''+escAttr(s.title)+'\')">\uD83C\uDFAC Video</button>'+
-      '<button class="btn-card btn-preview" onclick="event.stopPropagation();window.open(\''+(s.url||'#')+'\',\'_blank\')">\u2197 Source</button>'+
-      '</div></div></div>';
-  }).join('');
-}
-
-/* Expose for refresh button */
+    return '<div class="topic-card shorts-card" style="animation:fadeSlide .4s ease '+i*.06+'s both;flex:0 0 360px"><div class="card-image"><div class="placeholder">'+pe+'</div><div class="card-gradient"></div><div class="card-source-badge" style="background:rgba(0,212,255,.2);color:var(--accent-secondary);border:1px solid rgba(0,212,255,.3)">\uD83C\uDFAC SHORTS IDEA</div>'+(ht?'<div class="card-score"><span class="shorts-badge '+bc+'">'+ht+'</span></div>':'')+'</div><div class="card-body"><div class="card-title">'+escHtml(s.title)+'</div><div class="card-meta"><span>'+(s.time_ago||'Recent')+'</span><span>'+(s.source_name||s.source||'')+'</span></div><div class="card-why">'+escHtml(s.angle||s.why_trending||'')+'</div>'+(s.original_title?'<div class="shorts-original">\u2190 '+escHtml(s.original_title)+'</div>':'')+'<div class="card-actions"><button class="btn-card btn-campaign" onclick="event.stopPropagation();generate(\''+escAttr(s.title)+'\')">\u26A1 Generate</button><button class="btn-card btn-video" onclick="event.stopPropagation();openVideoPicker(\''+escAttr(s.title)+'\')">\uD83C\uDFAC Video</button><button class="btn-card btn-preview" onclick="event.stopPropagation();window.open(\''+(s.url||'#')+'\',\'_blank\')">\u2197 Source</button></div></div></div>'
+  }).join('')}
 window._loadShorts=loadShortsIdeas;
-
-/* Auto-load after a short delay (let trending feed load first) */
-setTimeout(loadShortsIdeas, 1500);
+setTimeout(loadShortsIdeas,1500);
 })();
 """
-    return Response(content=js, media_type="application/javascript")
+
+@app.get("/api/shorts/inject.js")
+async def shorts_inject_js():
+    """Serve the Shorts UI module as a self-contained JS file."""
+    return Response(content=SHORTS_INJECT_JS, media_type="application/javascript")
 
 # ─── VIDEO RESEARCH ENDPOINTS ─────────────────────────────────────
 @app.post("/api/videos/search")

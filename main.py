@@ -1,4 +1,4 @@
-"""AJ Content Engine — FastAPI Server + Netflix-Style Trending Feed + Dashboard"""
+"""AJ Content Engine — FastAPI Server + Netflix-Style Trending Feed + Video Research + Dashboard"""
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -7,8 +7,9 @@ import os, uvicorn
 from datetime import datetime
 from crew import ContentEngineCrew
 from tools.trending_fetcher import fetch_all_trending
+from tools.video_researcher import search_videos, select_and_host_video
 
-app = FastAPI(title="AJ Content Engine", description="Multi-Agent Autonomous Content Production System", version="2.0.0")
+app = FastAPI(title="AJ Content Engine", description="Multi-Agent Autonomous Content Production System", version="3.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 templates = Jinja2Templates(directory="templates")
 campaigns = []
@@ -30,6 +31,35 @@ async def get_trending(page: int = 0):
     except Exception as e:
         return JSONResponse({"error": str(e), "topics": [], "total": 0, "page": page, "has_more": False}, status_code=500)
 
+# ─── VIDEO RESEARCH ENDPOINTS ─────────────────────────────────────
+@app.post("/api/videos/search")
+async def video_search(request: Request):
+    """Search for videos related to a topic. Returns 3-5 video options."""
+    try:
+        body = await request.json()
+        topic = body.get("topic", "").strip()
+        if not topic:
+            return JSONResponse({"error": "Topic is required"}, status_code=400)
+        max_results = min(body.get("max_results", 5), 8)
+        videos = await search_videos(topic, max_results=max_results)
+        return JSONResponse({"topic": topic, "videos": videos, "count": len(videos)})
+    except Exception as e:
+        return JSONResponse({"error": str(e), "videos": []}, status_code=500)
+
+@app.post("/api/videos/select")
+async def video_select(request: Request):
+    """Download a selected video and upload to Supabase for permanent hosting."""
+    try:
+        body = await request.json()
+        video_url = body.get("url", "").strip()
+        if not video_url:
+            return JSONResponse({"error": "Video URL is required"}, status_code=400)
+        result = await select_and_host_video(video_url)
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e), "status": "error"}, status_code=500)
+
+# ─── CAMPAIGN ENDPOINTS ───────────────────────────────────────────
 @app.post("/api/campaign/generate")
 async def generate_campaign(request: Request):
     try:
@@ -75,9 +105,9 @@ async def list_campaigns():
 
 @app.get("/api/health")
 async def health():
-    return {"status": "healthy", "app": "AJ Content Engine", "version": "2.0.0", "agents": 6,
-        "features": ["trending_feed", "one_click_generate", "multi_agent_pipeline"],
-        "keys": {k: bool(os.getenv(v)) for k, v in {"anthropic": "ANTHROPIC_API_KEY", "serper": "SERPER_API_KEY", "gemini": "GEMINI_API_KEY", "twitter": "TWITTER_API_KEY", "linkedin": "LINKEDIN_ACCESS_TOKEN", "bluesky": "BLUESKY_HANDLE", "reddit": "REDDIT_CLIENT_ID", "telegram": "TELEGRAM_BOT_TOKEN", "sendgrid": "SENDGRID_API_KEY"}.items()}}
+    return {"status": "healthy", "app": "AJ Content Engine", "version": "3.0.0", "agents": 6,
+        "features": ["trending_feed", "one_click_generate", "multi_agent_pipeline", "video_research"],
+        "keys": {k: bool(os.getenv(v)) for k, v in {"anthropic": "ANTHROPIC_API_KEY", "serper": "SERPER_API_KEY", "gemini": "GEMINI_API_KEY", "twitter": "TWITTER_API_KEY", "linkedin": "LINKEDIN_ACCESS_TOKEN", "bluesky": "BLUESKY_HANDLE", "reddit": "REDDIT_CLIENT_ID", "telegram": "TELEGRAM_BOT_TOKEN", "sendgrid": "SENDGRID_API_KEY", "supabase": "SUPABASE_URL"}.items()}}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8000)), reload=True)

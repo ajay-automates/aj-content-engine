@@ -1,212 +1,179 @@
-"""AJ Content Engine — Twitter Video Scanner
-Scans official AI company accounts, AI creators, and AI news accounts
-for tweets that contain NATIVE VIDEO attachments. These become
-video-ready content topics — the video B-roll is already included.
+"""AJ Content Engine — Twitter Video Scanner (Serper-powered)
+Finds tweets with native video from AI company accounts using Serper API
+(Google search for site:x.com). No Twitter API needed — uses your existing
+Serper key at zero extra cost.
 
-Flow: Scan accounts → filter for video tweets → return as feed items
-with tweet text as topic + video URL ready for yt-dlp download.
+Flow: Search Serper for "site:x.com [account] video" → filter results that
+are actual tweet URLs → return as video-ready feed items for yt-dlp download.
 """
 import os
 import re
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
 
 logger = logging.getLogger("twitter_video_scanner")
 
-TWITTER_BEARER = os.getenv("TWITTER_BEARER_TOKEN", "")
+SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
 
 # ─── ACCOUNTS TO TRACK ────────────────────────────────────────────
-# 3 tiers: official product accounts, AI creators, AI news aggregators
-
 TRACKED_ACCOUNTS = {
-    # Tier 1: Official AI company accounts (highest priority)
     "official": [
         "AnthropicAI", "OpenAI", "GoogleAI", "GoogleDeepMind",
-        "Meta", "MetaAI", "nvidia", "xaborai", "MistralAI",
-        "HuggingFace", "StabilityAI", "midaborney", "RunwayML",
-        "peraborexity_ai", "CohereAI", "DeepSeek_AI",
-        "Apple",  # occasional AI announcements
+        "MetaAI", "nvidia", "MistralAI",
+        "HuggingFace", "StabilityAI", "RunwayML",
+        "perplexity_ai", "CohereAI", "Apple",
     ],
-    # Tier 2: AI creators / builders / researchers
     "creators": [
-        "mattshumer_", "DrJimFan", "kaborarpathy",
-        "emaborllad", "swyx", "AiBreakfast",
-        "mattaborolfe", "ElaborI2go", "RichaborardSocher",
-        "YannLeCun", "AlaborphaSignalAI", "risaborbSRK",
+        "mattshumer_", "DrJimFan", "karpathy",
+        "swyx", "AiBreakfast", "maboreshumer_",
+        "ElaborI2go", "YannLeCun",
     ],
-    # Tier 3: AI news / aggregator accounts
     "news": [
-        "TheAIGRID", "ai_for_success", "aiaborupdate",
-        "Sababoroo_Stein", "technaborReview", "vergeabortech",
+        "TheAIGRID", "ai_for_success",
+        "technaborReview",
     ],
 }
 
-# Flatten all handles for API query
-ALL_HANDLES = []
-for tier in TRACKED_ACCOUNTS.values():
-    ALL_HANDLES.extend(tier)
+# Build search queries — group accounts by tier for focused searches
+SEARCH_QUERIES = [
+    # Official company announcements with video
+    "site:x.com (AnthropicAI OR OpenAI OR GoogleAI OR GoogleDeepMind) video",
+    "site:x.com (MetaAI OR nvidia OR MistralAI OR HuggingFace) video",
+    "site:x.com (StabilityAI OR RunwayML OR perplexity_ai OR Apple) AI video",
+    # Creator posts with demos/videos
+    "site:x.com (DrJimFan OR karpathy OR mattshumer_ OR swyx) AI demo video",
+    # Broader AI video tweets (catches trending posts)
+    "site:x.com AI announcement video demo 2025",
+    "site:x.com new AI tool launch video demo",
+]
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  TWITTER API v2: Search for video tweets from tracked accounts
+#  SERPER-POWERED TWITTER VIDEO SEARCH
 # ═══════════════════════════════════════════════════════════════════
 
 async def fetch_video_tweets(max_results: int = 20, hours_back: int = 72) -> list[dict]:
-    """Fetch recent tweets WITH VIDEO from tracked AI accounts.
-    Uses Twitter API v2 recent search with media filtering."""
-    if not TWITTER_BEARER:
-        logger.warning("TWITTER_BEARER_TOKEN not set — cannot scan Twitter videos")
+    """Fetch recent tweets with video from AI accounts via Serper API.
+    Uses Google search with site:x.com to find tweet URLs, then
+    enriches them with metadata for the feed."""
+    if not SERPER_API_KEY:
+        logger.warning("SERPER_API_KEY not set — cannot scan Twitter videos")
         return []
 
-    # Build the query: from any tracked account + has video
-    # Twitter API limits query to 512 chars, so we batch accounts
-    all_results = []
-
-    # Split accounts into batches to stay under query length limit
-    batches = _build_account_batches(ALL_HANDLES, max_per_batch=12)
-
-    # Calculate time window
-    start_time = (datetime.now(timezone.utc) - timedelta(hours=hours_back)).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    tasks = [_fetch_batch(batch, start_time, max_results=max_results) for batch in batches]
+    # Run all search queries in parallel
+    tasks = [_search_serper_twitter(q, num=8) for q in SEARCH_QUERIES]
     batch_results = await asyncio.gather(*tasks, return_exceptions=True)
 
+    all_results = []
     for result in batch_results:
         if isinstance(result, list):
             all_results.extend(result)
 
-    # Deduplicate by tweet ID
-    seen = set()
+    # Deduplicate by tweet URL
+    seen_urls = set()
     unique = []
     for item in all_results:
-        if item["tweet_id"] not in seen:
-            seen.add(item["tweet_id"])
+        url_key = item.get("url", "").split("?")[0].lower()
+        if url_key and url_key not in seen_urls:
+            seen_urls.add(url_key)
             unique.append(item)
 
-    # Sort by engagement (likes + retweets) descending
-    unique.sort(key=lambda x: x.get("engagement", 0), reverse=True)
+    # Sort by position score (Serper rank) — higher ranked = more relevant
+    unique.sort(key=lambda x: x.get("rank_score", 0), reverse=True)
 
     return unique[:max_results]
 
 
-async def _fetch_batch(handles: list[str], start_time: str, max_results: int = 20) -> list[dict]:
-    """Fetch video tweets for a batch of account handles."""
-    # Build query: (from:handle1 OR from:handle2 ...) has:videos -is:retweet
-    from_clause = " OR ".join([f"from:{h}" for h in handles])
-    query = f"({from_clause}) has:videos -is:retweet"
-
+async def _search_serper_twitter(query: str, num: int = 8) -> list[dict]:
+    """Search Serper for Twitter/X posts matching query."""
     try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.get(
-                "https://api.twitter.com/2/tweets/search/recent",
-                headers={"Authorization": f"Bearer {TWITTER_BEARER}"},
-                params={
-                    "query": query,
-                    "max_results": min(max_results, 100),
-                    "start_time": start_time,
-                    "sort_order": "relevancy",
-                    "tweet.fields": "created_at,public_metrics,author_id,attachments,entities",
-                    "expansions": "author_id,attachments.media_keys",
-                    "media.fields": "type,url,preview_image_url,duration_ms,variants",
-                    "user.fields": "username,name,profile_image_url,verified",
-                },
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                "https://google.serper.dev/search",
+                headers={"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"},
+                json={"q": query, "num": num, "tbs": "qdr:w"},  # Last week
             )
-
-            if resp.status_code == 429:
-                logger.warning("Twitter rate limited — skipping this batch")
-                return []
-
-            if resp.status_code != 200:
-                logger.error("Twitter API error %d: %s", resp.status_code, resp.text[:300])
-                return []
-
+            resp.raise_for_status()
             data = resp.json()
 
-        # Build lookups
-        users = {}
-        for u in data.get("includes", {}).get("users", []):
-            users[u["id"]] = u
-
-        media_map = {}
-        for m in data.get("includes", {}).get("media", []):
-            media_map[m["media_key"]] = m
-
         results = []
-        for tweet in data.get("data", []):
-            # Get media keys for this tweet
-            media_keys = tweet.get("attachments", {}).get("media_keys", [])
-            if not media_keys:
+        organic = data.get("organic", [])
+
+        for i, item in enumerate(organic):
+            link = item.get("link", "")
+
+            # Only keep actual tweet URLs (not profile pages, lists, etc.)
+            if not _is_tweet_url(link):
                 continue
 
-            # Find video media
-            video_info = None
-            for mk in media_keys:
-                media = media_map.get(mk)
-                if media and media.get("type") == "video":
-                    video_info = media
-                    break
+            # Extract username and tweet ID from URL
+            username, tweet_id = _parse_tweet_url(link)
+            if not username:
+                continue
 
-            if not video_info:
-                continue  # No video in this tweet
+            title = item.get("title", "")
+            snippet = item.get("snippet", "")
 
-            # Get author info
-            author = users.get(tweet.get("author_id"), {})
-            username = author.get("username", "")
-            name = author.get("name", "")
-            avatar = author.get("profile_image_url", "")
-            verified = author.get("verified", False)
+            # Check if this looks like it has video content
+            # (Serper snippets often mention "video" or the title indicates media)
+            text_lower = (title + " " + snippet).lower()
+            has_video_signal = any(w in text_lower for w in [
+                "video", "watch", "demo", "launch", "introducing", "announcing",
+                "new", "released", "shipped", "built", "check out", "here's",
+                "thread", "clip", "preview", "reveal", "showcase",
+            ])
 
-            # Get engagement metrics
-            metrics = tweet.get("public_metrics", {})
-            likes = metrics.get("like_count", 0)
-            retweets = metrics.get("retweet_count", 0)
-            views = metrics.get("impression_count", 0)
-            engagement = likes + retweets
+            # Get thumbnail if available
+            thumbnail = ""
+            if item.get("thumbnailUrl"):
+                thumbnail = item["thumbnailUrl"]
+            elif item.get("imageUrl"):
+                thumbnail = item["imageUrl"]
 
-            # Get video URL (best quality variant)
-            video_url = _extract_best_video_url(video_info)
-            video_thumbnail = video_info.get("preview_image_url", "")
-            video_duration_ms = video_info.get("duration_ms", 0)
-            video_duration_sec = video_duration_ms // 1000 if video_duration_ms else 0
-
-            # Format time
-            time_ago = _format_tweet_time(tweet.get("created_at", ""))
-
-            # Clean tweet text for use as a topic title
-            text = tweet.get("text", "")
-            clean_title = _clean_tweet_text(text)
-
-            # Determine account tier
+            # Determine tier
             tier = _get_account_tier(username)
 
-            tweet_url = f"https://x.com/{username}/status/{tweet['id']}"
+            # Clean title — remove "on X" / "on Twitter" suffixes
+            clean_title = _clean_serper_title(title, snippet, username)
+
+            # Rank score: position in results + video signal bonus + tier bonus
+            rank_score = (num - i) * 10  # Higher rank = more points
+            if has_video_signal:
+                rank_score += 50
+            if tier == "official":
+                rank_score += 30
+            elif tier == "creator":
+                rank_score += 15
 
             results.append({
-                "tweet_id": tweet["id"],
+                "tweet_id": tweet_id or str(uuid.uuid4())[:12],
                 "title": clean_title,
-                "full_text": text,
-                "url": tweet_url,
-                "video_url": video_url,
-                "video_thumbnail": video_thumbnail,
-                "video_duration": video_duration_sec,
-                "video_duration_str": f"{video_duration_sec // 60}:{video_duration_sec % 60:02d}" if video_duration_sec else "?",
-                "author": name,
+                "full_text": snippet,
+                "url": link,
+                "video_url": "",  # Will be resolved by yt-dlp on download
+                "video_thumbnail": thumbnail,
+                "video_duration": 0,
+                "video_duration_str": "",
+                "author": _format_display_name(username),
                 "username": username,
-                "avatar": avatar,
-                "verified": verified,
+                "avatar": "",
+                "verified": tier == "official",
                 "tier": tier,
-                "likes": likes,
-                "retweets": retweets,
-                "views": views,
-                "engagement": engagement,
-                "views_str": _format_count(views),
-                "likes_str": _format_count(likes),
-                "retweets_str": _format_count(retweets),
-                "time_ago": time_ago,
+                "likes": 0,
+                "retweets": 0,
+                "views": 0,
+                "engagement": 0,
+                "views_str": "",
+                "likes_str": "",
+                "retweets_str": "",
+                "time_ago": item.get("date", "Recent"),
+                "rank_score": rank_score,
+                "has_video_signal": has_video_signal,
                 "source": "twitter_video",
                 "source_name": f"@{username}",
                 "category": "video_ready",
@@ -215,7 +182,68 @@ async def _fetch_batch(handles: list[str], start_time: str, max_results: int = 2
         return results
 
     except Exception as e:
-        logger.error("Twitter batch fetch error: %s", e)
+        logger.error("Serper Twitter search error: %s", e)
+        return []
+
+
+# Also search Serper Videos endpoint for Twitter video content
+async def _search_serper_twitter_videos(query: str, num: int = 5) -> list[dict]:
+    """Search Serper Videos endpoint for Twitter/X video content."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                "https://google.serper.dev/videos",
+                headers={"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"},
+                json={"q": query, "num": num},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        results = []
+        for i, v in enumerate(data.get("videos", [])):
+            link = v.get("link", "")
+            if not _is_tweet_url(link):
+                continue
+
+            username, tweet_id = _parse_tweet_url(link)
+            if not username:
+                continue
+
+            tier = _get_account_tier(username)
+            duration = v.get("duration", "")
+
+            results.append({
+                "tweet_id": tweet_id or str(uuid.uuid4())[:12],
+                "title": _clean_serper_title(v.get("title", ""), v.get("snippet", ""), username),
+                "full_text": v.get("snippet", ""),
+                "url": link,
+                "video_url": "",
+                "video_thumbnail": v.get("imageUrl") or v.get("thumbnailUrl", ""),
+                "video_duration": 0,
+                "video_duration_str": duration or "",
+                "author": _format_display_name(username),
+                "username": username,
+                "avatar": "",
+                "verified": tier == "official",
+                "tier": tier,
+                "likes": 0,
+                "retweets": 0,
+                "views": 0,
+                "engagement": 0,
+                "views_str": "",
+                "likes_str": "",
+                "retweets_str": "",
+                "time_ago": v.get("date", "Recent"),
+                "rank_score": (num - i) * 10 + 40,  # Video endpoint gets bonus
+                "has_video_signal": True,
+                "source": "twitter_video",
+                "source_name": f"@{username}",
+                "category": "video_ready",
+            })
+
+        return results
+    except Exception as e:
+        logger.error("Serper Twitter videos error: %s", e)
         return []
 
 
@@ -223,54 +251,48 @@ async def _fetch_batch(handles: list[str], start_time: str, max_results: int = 2
 #  HELPERS
 # ═══════════════════════════════════════════════════════════════════
 
-def _build_account_batches(handles: list[str], max_per_batch: int = 12) -> list[list[str]]:
-    """Split handles into batches to keep Twitter query under 512 char limit."""
-    batches = []
-    current = []
-    for h in handles:
-        current.append(h)
-        if len(current) >= max_per_batch:
-            batches.append(current)
-            current = []
-    if current:
-        batches.append(current)
-    return batches
+def _is_tweet_url(url: str) -> bool:
+    """Check if URL is an actual tweet (not a profile, list, search, etc.)."""
+    patterns = [
+        r'https?://(x\.com|twitter\.com)/\w+/status/\d+',
+    ]
+    return any(re.match(p, url) for p in patterns)
 
 
-def _extract_best_video_url(media: dict) -> str:
-    """Extract the best quality video URL from Twitter media variants."""
-    variants = media.get("variants", [])
-    if not variants:
-        return ""
-
-    # Filter for mp4 variants and pick highest bitrate
-    mp4s = [v for v in variants if v.get("content_type") == "video/mp4"]
-    if mp4s:
-        # Sort by bitrate descending
-        mp4s.sort(key=lambda v: v.get("bit_rate", 0), reverse=True)
-        return mp4s[0].get("url", "")
-
-    # Fallback to any variant
-    return variants[0].get("url", "")
+def _parse_tweet_url(url: str) -> tuple[str, str]:
+    """Extract username and tweet ID from a tweet URL."""
+    match = re.search(r'(?:x\.com|twitter\.com)/(\w+)/status/(\d+)', url)
+    if match:
+        return match.group(1), match.group(2)
+    return "", ""
 
 
-def _clean_tweet_text(text: str) -> str:
-    """Clean tweet text into a usable topic title.
-    Removes URLs, @mentions at start, and truncates."""
-    # Remove URLs
-    text = re.sub(r'https?://\S+', '', text).strip()
-    # Remove leading @mentions
-    text = re.sub(r'^(@\w+\s*)+', '', text).strip()
-    # Remove trailing whitespace and newlines, take first line
-    lines = text.split('\n')
-    first_line = lines[0].strip()
-    # If first line is short and there's more, combine first two
-    if len(first_line) < 30 and len(lines) > 1:
-        first_line = first_line + " " + lines[1].strip()
+def _clean_serper_title(title: str, snippet: str, username: str) -> str:
+    """Clean Serper search result title into a usable topic title."""
+    # Remove common suffixes
+    for suffix in [" on X", " / X", " / Twitter", " on Twitter",
+                   f" (@{username})", f"({username})", " - X", " - Twitter"]:
+        title = title.replace(suffix, "")
+
+    # Remove username prefix patterns
+    title = re.sub(r'^[\w\s]+ on X:\s*["\u201c]?', '', title)
+    title = re.sub(r'^[\w\s]+ \(@\w+\):\s*', '', title)
+
+    # Remove surrounding quotes
+    title = title.strip('""\u201c\u201d\'')
+
+    # If title is too short after cleaning, use snippet
+    if len(title) < 15 and snippet:
+        title = snippet.split('.')[0].strip()
+
+    # Remove URLs from title
+    title = re.sub(r'https?://\S+', '', title).strip()
+
     # Truncate
-    if len(first_line) > 120:
-        first_line = first_line[:117] + "..."
-    return first_line if first_line else text[:120]
+    if len(title) > 120:
+        title = title[:117] + "..."
+
+    return title if title else f"Post by @{username}"
 
 
 def _get_account_tier(username: str) -> str:
@@ -282,28 +304,34 @@ def _get_account_tier(username: str) -> str:
     for handle in TRACKED_ACCOUNTS.get("creators", []):
         if handle.lower() == lower:
             return "creator"
-    return "news"
+    for handle in TRACKED_ACCOUNTS.get("news", []):
+        if handle.lower() == lower:
+            return "news"
+    # Default: check if it looks like a company account
+    company_keywords = ["ai", "lab", "tech", "deep", "meta", "google", "open", "nvidia"]
+    if any(kw in lower for kw in company_keywords):
+        return "official"
+    return "creator"
 
 
-def _format_tweet_time(created_at: str) -> str:
-    """Format tweet timestamp into relative time."""
-    if not created_at:
-        return "Recent"
-    try:
-        dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-        delta = datetime.now(timezone.utc) - dt
-        if delta.days > 0:
-            return f"{delta.days}d ago"
-        elif delta.seconds > 3600:
-            return f"{delta.seconds // 3600}h ago"
-        else:
-            return f"{max(delta.seconds // 60, 1)}m ago"
-    except Exception:
-        return "Recent"
+def _format_display_name(username: str) -> str:
+    """Convert username to a display-friendly name."""
+    known = {
+        "anthropicai": "Anthropic", "openai": "OpenAI",
+        "googleai": "Google AI", "googledeepmind": "Google DeepMind",
+        "metaai": "Meta AI", "nvidia": "NVIDIA",
+        "mistralai": "Mistral AI", "huggingface": "Hugging Face",
+        "stabilityai": "Stability AI", "runwayml": "Runway",
+        "perplexity_ai": "Perplexity", "cohereai": "Cohere",
+        "apple": "Apple", "drjimfan": "Jim Fan",
+        "karpathy": "Andrej Karpathy", "yannlecun": "Yann LeCun",
+        "swyx": "swyx", "mattshumer_": "Matt Shumer",
+        "theaigrid": "The AI Grid", "ai_for_success": "AI for Success",
+    }
+    return known.get(username.lower(), username)
 
 
 def _format_count(count: int) -> str:
-    """Format large numbers for display."""
     if count >= 1_000_000:
         return f"{count / 1_000_000:.1f}M"
     if count >= 1_000:

@@ -230,9 +230,9 @@ async def download_video(url: str, max_duration: int = MAX_VIDEO_DURATION) -> Op
         "yt-dlp",
         # Use iOS player client — bypasses YouTube bot detection on server IPs
         "--extractor-args", "youtube:player_client=ios,web",
-        # Simplified format selector: prefer mp4 ≤720p, fall back to anything
-        "--format", "best[height<=720][ext=mp4]/best[height<=720]/best",
-        "--merge-output-format", "mp4",
+        # 22=720p mp4 (combined), 18=360p mp4 (combined) — no ffmpeg needed.
+        # These are pre-muxed streams that download as a single file.
+        "--format", "22/18/best[height<=480]/best",
         "--max-filesize", f"{MAX_VIDEO_SIZE_MB}M",
         "--socket-timeout", "30",
         "--no-playlist",

@@ -5,416 +5,59 @@
 <title>AJ Content Engine</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root {
-  --bg-primary: #0a0a0f;
-  --bg-card: #141420;
-  --bg-card-hover: #1c1c30;
-  --accent: #e50914;
-  --accent-glow: rgba(229,9,20,.35);
-  --accent-secondary: #00d4ff;
-  --text-primary: #f1f1f1;
-  --text-secondary: #8b8ba3;
-  --text-muted: #55556a;
-  --border: #1e1e30;
-  --gradient-hero: linear-gradient(180deg, transparent 0%, var(--bg-primary) 100%);
-}
-
-* { margin:0; padding:0; box-sizing:border-box; }
-html { scroll-behavior: smooth; }
-body { font-family:'DM Sans',sans-serif; background:var(--bg-primary); color:var(--text-primary); min-height:100vh; overflow-x:hidden; }
-
-::-webkit-scrollbar { height:6px; width:6px; }
-::-webkit-scrollbar-track { background:transparent; }
-::-webkit-scrollbar-thumb { background:#333; border-radius:3px; }
-::-webkit-scrollbar-thumb:hover { background:#555; }
-
-.topnav {
-  position:fixed; top:0; left:0; right:0; z-index:100;
-  display:flex; align-items:center; justify-content:space-between;
-  padding:16px 48px;
-  background:linear-gradient(180deg, rgba(10,10,15,.95) 0%, rgba(10,10,15,.7) 70%, transparent 100%);
-  backdrop-filter:blur(12px); transition:background .3s;
-}
-.topnav.scrolled { background:rgba(10,10,15,.97); }
-.logo { font-family:'Bebas Neue',sans-serif; font-size:1.8rem; letter-spacing:3px; color:var(--accent); text-decoration:none; }
-.logo span { color:var(--text-primary); }
-.nav-links { display:flex; gap:28px; align-items:center; }
-.nav-links a { color:var(--text-secondary); text-decoration:none; font-size:.9rem; font-weight:500; transition:color .2s; position:relative; }
-.nav-links a:hover { color:var(--text-primary); }
-.nav-links a.active { color:var(--text-primary); }
-.nav-links a.active::after { content:''; position:absolute; bottom:-4px; left:0; right:0; height:2px; background:var(--accent); border-radius:1px; }
-
-.hero {
-  position:relative; padding:140px 48px 60px; min-height:480px;
-  background: radial-gradient(ellipse at 20% 50%, rgba(229,9,20,.08) 0%, transparent 50%), radial-gradient(ellipse at 80% 30%, rgba(0,212,255,.05) 0%, transparent 50%), var(--bg-primary);
-  overflow:hidden;
-}
-.hero::after { content:''; position:absolute; bottom:0; left:0; right:0; height:120px; background:var(--gradient-hero); }
-.hero-content { position:relative; z-index:2; max-width:680px; }
-.hero-badge {
-  display:inline-flex; align-items:center; gap:8px; padding:6px 14px; border-radius:20px;
-  background:rgba(229,9,20,.12); border:1px solid rgba(229,9,20,.25);
-  font-size:.75rem; font-weight:600; color:var(--accent); letter-spacing:1px; text-transform:uppercase; margin-bottom:20px;
-}
-.hero-badge .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); animation:pulse 2s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-.hero h1 { font-family:'Bebas Neue',sans-serif; font-size:4.2rem; line-height:1; letter-spacing:2px; margin-bottom:16px; }
-.hero h1 .red { color:var(--accent); }
-.hero p { color:var(--text-secondary); font-size:1.15rem; line-height:1.6; margin-bottom:32px; max-width:560px; }
-
-.manual-input {
-  display:flex; gap:12px; align-items:center;
-  background:var(--bg-card); border:1px solid var(--border); border-radius:14px;
-  padding:6px 6px 6px 20px; max-width:580px;
-}
-.manual-input input { flex:1; background:transparent; border:none; outline:none; color:var(--text-primary); font-size:1rem; font-family:inherit; }
-.manual-input input::placeholder { color:var(--text-muted); }
-.btn-generate {
-  padding:12px 24px; border:none; border-radius:10px; background:var(--accent); color:#fff;
-  font-weight:700; font-size:.9rem; cursor:pointer; transition:all .2s; white-space:nowrap; font-family:inherit;
-}
-.btn-generate:hover { background:#ff1a25; box-shadow:0 0 24px var(--accent-glow); transform:translateY(-1px); }
-
-.feed-section { padding:20px 0 40px; position:relative; z-index:2; }
-.section-header { display:flex; justify-content:space-between; align-items:center; padding:0 48px; margin-bottom:16px; }
-.section-title { font-family:'Bebas Neue',sans-serif; font-size:1.6rem; letter-spacing:1.5px; display:flex; align-items:center; gap:12px; }
-.section-title .icon { font-size:1.2rem; }
-.section-title .count {
-  font-family:'DM Sans',sans-serif; font-size:.7rem; font-weight:600; color:var(--accent);
-  background:rgba(229,9,20,.12); padding:3px 10px; border-radius:10px; letter-spacing:.5px;
-}
-
-.scroll-row {
-  display:flex; gap:16px; overflow-x:auto; padding:8px 48px 20px;
-  scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; scrollbar-width:thin;
-}
-.scroll-row::-webkit-scrollbar { height:4px; }
-
-.topic-card {
-  flex:0 0 340px; min-height:260px; background:var(--bg-card); border:1px solid var(--border);
-  border-radius:14px; padding:0; overflow:hidden; cursor:pointer; scroll-snap-align:start;
-  transition:all .3s cubic-bezier(.25,.46,.45,.94); position:relative; display:flex; flex-direction:column;
-}
-.topic-card:hover {
-  transform:scale(1.04); border-color:rgba(229,9,20,.3);
-  box-shadow:0 12px 40px rgba(0,0,0,.5), 0 0 20px var(--accent-glow); z-index:10;
-}
-
-.card-image { width:100%; height:140px; object-fit:cover; background:linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%); position:relative; overflow:hidden; }
-.card-image img { width:100%; height:100%; object-fit:cover; }
-.card-image .placeholder {
-  width:100%; height:100%; background:linear-gradient(135deg, #1c1c30 0%, #12121f 50%, #1a1028 100%);
-  display:flex; align-items:center; justify-content:center; font-size:2.5rem; opacity:.3;
-}
-.card-gradient { position:absolute; bottom:0; left:0; right:0; height:60px; background:linear-gradient(transparent, var(--bg-card)); }
-.card-source-badge {
-  position:absolute; top:12px; left:12px; padding:4px 10px; border-radius:6px;
-  font-size:.65rem; font-weight:700; letter-spacing:.5px; text-transform:uppercase; backdrop-filter:blur(8px);
-}
-.source-serper { background:rgba(66,133,244,.25); color:#8ab4f8; border:1px solid rgba(66,133,244,.3); }
-.source-reddit { background:rgba(255,69,0,.25); color:#ff6b35; border:1px solid rgba(255,69,0,.3); }
-.source-hackernews { background:rgba(255,102,0,.25); color:#ff8c42; border:1px solid rgba(255,102,0,.3); }
-.source-rss { background:rgba(0,212,255,.2); color:var(--accent-secondary); border:1px solid rgba(0,212,255,.3); }
-.card-score {
-  position:absolute; top:12px; right:12px; padding:4px 8px; border-radius:6px;
-  font-size:.7rem; font-weight:700; background:rgba(0,0,0,.6); backdrop-filter:blur(8px);
-  color:var(--accent); display:flex; align-items:center; gap:4px;
-}
-
-.card-body { padding:16px 18px; flex:1; display:flex; flex-direction:column; }
-.card-title {
-  font-weight:700; font-size:.95rem; line-height:1.4; margin-bottom:8px;
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; color:var(--text-primary);
-}
-.card-meta { font-size:.75rem; color:var(--text-muted); margin-bottom:12px; display:flex; align-items:center; gap:8px; }
-.card-why {
-  font-size:.8rem; color:var(--text-secondary); line-height:1.5;
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; flex:1;
-}
-.card-actions { display:flex; gap:8px; margin-top:14px; }
-.btn-card { flex:1; padding:10px 14px; border:none; border-radius:8px; font-size:.78rem; font-weight:700; cursor:pointer; transition:all .2s; font-family:inherit; letter-spacing:.3px; }
-.btn-campaign { background:var(--accent); color:#fff; }
-.btn-campaign:hover { background:#ff1a25; box-shadow:0 0 16px var(--accent-glow); }
-.btn-preview { background:rgba(255,255,255,.06); color:var(--text-secondary); border:1px solid var(--border); }
-.btn-preview:hover { background:rgba(255,255,255,.1); color:var(--text-primary); }
-
-.load-more-container { text-align:center; padding:20px 48px 60px; }
-.btn-load-more {
-  padding:14px 48px; border:1px solid var(--border); border-radius:12px; background:var(--bg-card);
-  color:var(--text-secondary); font-size:.95rem; font-weight:600; cursor:pointer;
-  transition:all .25s; font-family:inherit; letter-spacing:.5px;
-}
-.btn-load-more:hover { border-color:var(--accent); color:var(--text-primary); box-shadow:0 0 20px var(--accent-glow); background:var(--bg-card-hover); }
-
-.skeleton {
-  background:linear-gradient(90deg, var(--bg-card) 25%, #1e1e32 50%, var(--bg-card) 75%);
-  background-size:200% 100%; animation:shimmer 1.5s infinite; border-radius:14px;
-}
-@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-.skeleton-card { flex:0 0 340px; height:260px; border-radius:14px; }
-
-.generating-overlay {
-  display:none; position:fixed; inset:0; z-index:200; background:rgba(10,10,15,.92);
-  backdrop-filter:blur(16px); flex-direction:column; align-items:center; justify-content:center;
-}
-.generating-overlay.active { display:flex; }
-.gen-spinner { width:56px; height:56px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; margin-bottom:28px; }
-@keyframes spin { to{transform:rotate(360deg)} }
-.gen-text { font-size:1.1rem; color:var(--text-secondary); margin-bottom:8px; }
-.gen-agent { font-family:'Bebas Neue',sans-serif; font-size:1.6rem; color:var(--accent); letter-spacing:2px; }
-.gen-progress { width:300px; height:3px; background:var(--border); border-radius:2px; margin-top:24px; overflow:hidden; }
-.gen-progress-bar { height:100%; background:var(--accent); border-radius:2px; width:0%; transition:width .5s ease; }
-
-.result-modal {
-  display:none; position:fixed; inset:0; z-index:300; background:rgba(10,10,15,.95);
-  backdrop-filter:blur(20px); overflow-y:auto; padding:60px 48px;
-}
-.result-modal.active { display:block; }
-.result-close {
-  position:fixed; top:24px; right:36px; width:44px; height:44px; border:1px solid var(--border);
-  border-radius:50%; background:var(--bg-card); color:var(--text-primary); font-size:1.2rem;
-  cursor:pointer; z-index:310; display:flex; align-items:center; justify-content:center; transition:all .2s;
-}
-.result-close:hover { border-color:var(--accent); color:var(--accent); }
-.result-content { max-width:800px; margin:0 auto; }
-.result-content h2 { font-family:'Bebas Neue',sans-serif; font-size:2.4rem; letter-spacing:2px; margin-bottom:8px; }
-.result-content .result-topic { color:var(--accent); font-size:1rem; margin-bottom:32px; }
-.result-tabs { display:flex; gap:4px; margin-bottom:24px; }
-.result-tab {
-  padding:10px 20px; border:1px solid var(--border); border-radius:10px; background:transparent;
-  color:var(--text-muted); font-size:.85rem; cursor:pointer; transition:all .2s; font-family:inherit; font-weight:600;
-}
-.result-tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-.result-tab:hover:not(.active) { border-color:#444; color:var(--text-primary); }
-.result-output {
-  background:var(--bg-card); border:1px solid var(--border); border-radius:14px; padding:24px;
-  white-space:pre-wrap; word-wrap:break-word; font-size:.88rem; line-height:1.7;
-  color:var(--text-secondary); max-height:600px; overflow-y:auto;
-}
-.result-metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px; }
-.metric-box { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:18px; text-align:center; }
-.metric-val { font-family:'Bebas Neue',sans-serif; font-size:2rem; color:var(--accent); letter-spacing:1px; }
-.metric-label { font-size:.7rem; color:var(--text-muted); letter-spacing:.5px; text-transform:uppercase; margin-top:4px; }
-
-.empty-state { text-align:center; padding:80px 20px; }
-.empty-state .icon { font-size:3rem; margin-bottom:16px; opacity:.3; }
-.empty-state p { color:var(--text-muted); font-size:1rem; }
-
-@media(max-width:768px) {
-  .topnav, .section-header, .scroll-row, .load-more-container { padding-left:20px; padding-right:20px; }
-  .hero { padding:120px 20px 40px; }
-  .hero h1 { font-size:2.6rem; }
-  .topic-card { flex:0 0 280px; min-height:240px; }
-  .manual-input { flex-direction:column; padding:12px; }
-  .manual-input input { width:100%; padding:10px 0; }
-  .result-modal { padding:60px 20px; }
-  .result-metrics { grid-template-columns:repeat(2,1fr); }
-}
+:root{--bg-primary:#0a0a0f;--bg-card:#141420;--bg-card-hover:#1c1c30;--accent:#e50914;--accent-glow:rgba(229,9,20,.35);--accent-secondary:#00d4ff;--text-primary:#f1f1f1;--text-secondary:#8b8ba3;--text-muted:#55556a;--border:#1e1e30;--gradient-hero:linear-gradient(180deg,transparent 0%,var(--bg-primary) 100%)}
+*{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth}body{font-family:'DM Sans',sans-serif;background:var(--bg-primary);color:var(--text-primary);min-height:100vh;overflow-x:hidden}
+::-webkit-scrollbar{height:6px;width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#333;border-radius:3px}::-webkit-scrollbar-thumb:hover{background:#555}
+.topnav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:16px 48px;background:linear-gradient(180deg,rgba(10,10,15,.95) 0%,rgba(10,10,15,.7) 70%,transparent 100%);backdrop-filter:blur(12px);transition:background .3s}.topnav.scrolled{background:rgba(10,10,15,.97)}.logo{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:3px;color:var(--accent);text-decoration:none}.logo span{color:var(--text-primary)}.nav-links{display:flex;gap:28px;align-items:center}.nav-links a{color:var(--text-secondary);text-decoration:none;font-size:.9rem;font-weight:500;transition:color .2s;position:relative}.nav-links a:hover{color:var(--text-primary)}.nav-links a.active{color:var(--text-primary)}.nav-links a.active::after{content:'';position:absolute;bottom:-4px;left:0;right:0;height:2px;background:var(--accent);border-radius:1px}
+.hero{position:relative;padding:140px 48px 60px;min-height:480px;background:radial-gradient(ellipse at 20% 50%,rgba(229,9,20,.08) 0%,transparent 50%),radial-gradient(ellipse at 80% 30%,rgba(0,212,255,.05) 0%,transparent 50%),var(--bg-primary);overflow:hidden}.hero::after{content:'';position:absolute;bottom:0;left:0;right:0;height:120px;background:var(--gradient-hero)}.hero-content{position:relative;z-index:2;max-width:680px}.hero-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:20px;background:rgba(229,9,20,.12);border:1px solid rgba(229,9,20,.25);font-size:.75rem;font-weight:600;color:var(--accent);letter-spacing:1px;text-transform:uppercase;margin-bottom:20px}.hero-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}.hero h1{font-family:'Bebas Neue',sans-serif;font-size:4.2rem;line-height:1;letter-spacing:2px;margin-bottom:16px}.hero h1 .red{color:var(--accent)}.hero p{color:var(--text-secondary);font-size:1.15rem;line-height:1.6;margin-bottom:32px;max-width:560px}
+.manual-input{display:flex;gap:12px;align-items:center;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:6px 6px 6px 20px;max-width:580px}.manual-input input{flex:1;background:transparent;border:none;outline:none;color:var(--text-primary);font-size:1rem;font-family:inherit}.manual-input input::placeholder{color:var(--text-muted)}.btn-generate{padding:12px 24px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;font-size:.9rem;cursor:pointer;transition:all .2s;white-space:nowrap;font-family:inherit}.btn-generate:hover{background:#ff1a25;box-shadow:0 0 24px var(--accent-glow);transform:translateY(-1px)}
+.feed-section{padding:20px 0 40px;position:relative;z-index:2}.section-header{display:flex;justify-content:space-between;align-items:center;padding:0 48px;margin-bottom:16px}.section-title{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:1.5px;display:flex;align-items:center;gap:12px}.section-title .icon{font-size:1.2rem}.section-title .count{font-family:'DM Sans',sans-serif;font-size:.7rem;font-weight:600;color:var(--accent);background:rgba(229,9,20,.12);padding:3px 10px;border-radius:10px;letter-spacing:.5px}
+.scroll-row{display:flex;gap:16px;overflow-x:auto;padding:8px 48px 20px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:thin}.scroll-row::-webkit-scrollbar{height:4px}
+.topic-card{flex:0 0 340px;min-height:260px;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:0;overflow:hidden;cursor:pointer;scroll-snap-align:start;transition:all .3s cubic-bezier(.25,.46,.45,.94);position:relative;display:flex;flex-direction:column}.topic-card:hover{transform:scale(1.04);border-color:rgba(229,9,20,.3);box-shadow:0 12px 40px rgba(0,0,0,.5),0 0 20px var(--accent-glow);z-index:10}
+.card-image{width:100%;height:140px;object-fit:cover;background:linear-gradient(135deg,#1a1a2e 0%,#0f0f1a 100%);position:relative;overflow:hidden}.card-image img{width:100%;height:100%;object-fit:cover}.card-image .placeholder{width:100%;height:100%;background:linear-gradient(135deg,#1c1c30 0%,#12121f 50%,#1a1028 100%);display:flex;align-items:center;justify-content:center;font-size:2.5rem;opacity:.3}.card-gradient{position:absolute;bottom:0;left:0;right:0;height:60px;background:linear-gradient(transparent,var(--bg-card))}.card-source-badge{position:absolute;top:12px;left:12px;padding:4px 10px;border-radius:6px;font-size:.65rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;backdrop-filter:blur(8px)}
+.source-serper{background:rgba(66,133,244,.25);color:#8ab4f8;border:1px solid rgba(66,133,244,.3)}.source-reddit{background:rgba(255,69,0,.25);color:#ff6b35;border:1px solid rgba(255,69,0,.3)}.source-hackernews{background:rgba(255,102,0,.25);color:#ff8c42;border:1px solid rgba(255,102,0,.3)}.source-rss{background:rgba(0,212,255,.2);color:var(--accent-secondary);border:1px solid rgba(0,212,255,.3)}.source-twitter{background:rgba(29,155,240,.25);color:#1d9bf0;border:1px solid rgba(29,155,240,.3)}.source-producthunt{background:rgba(218,85,47,.25);color:#da552f;border:1px solid rgba(218,85,47,.3)}.source-arxiv{background:rgba(179,31,36,.25);color:#e84142;border:1px solid rgba(179,31,36,.3)}
+.card-score{position:absolute;top:12px;right:12px;padding:4px 8px;border-radius:6px;font-size:.7rem;font-weight:700;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);color:var(--accent);display:flex;align-items:center;gap:4px}
+.card-body{padding:16px 18px;flex:1;display:flex;flex-direction:column}.card-title{font-weight:700;font-size:.95rem;line-height:1.4;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:var(--text-primary)}.card-meta{font-size:.75rem;color:var(--text-muted);margin-bottom:12px;display:flex;align-items:center;gap:8px}.card-why{font-size:.8rem;color:var(--text-secondary);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:1}.card-actions{display:flex;gap:8px;margin-top:14px}.btn-card{flex:1;padding:10px 14px;border:none;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;letter-spacing:.3px}.btn-campaign{background:var(--accent);color:#fff}.btn-campaign:hover{background:#ff1a25;box-shadow:0 0 16px var(--accent-glow)}.btn-preview{background:rgba(255,255,255,.06);color:var(--text-secondary);border:1px solid var(--border)}.btn-preview:hover{background:rgba(255,255,255,.1);color:var(--text-primary)}
+.load-more-container{text-align:center;padding:20px 48px 60px}.btn-load-more{padding:14px 48px;border:1px solid var(--border);border-radius:12px;background:var(--bg-card);color:var(--text-secondary);font-size:.95rem;font-weight:600;cursor:pointer;transition:all .25s;font-family:inherit;letter-spacing:.5px}.btn-load-more:hover{border-color:var(--accent);color:var(--text-primary);box-shadow:0 0 20px var(--accent-glow);background:var(--bg-card-hover)}
+.skeleton{background:linear-gradient(90deg,var(--bg-card) 25%,#1e1e32 50%,var(--bg-card) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:14px}@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}.skeleton-card{flex:0 0 340px;height:260px;border-radius:14px}
+.generating-overlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(10,10,15,.92);backdrop-filter:blur(16px);flex-direction:column;align-items:center;justify-content:center}.generating-overlay.active{display:flex}.gen-spinner{width:56px;height:56px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:28px}@keyframes spin{to{transform:rotate(360deg)}}.gen-text{font-size:1.1rem;color:var(--text-secondary);margin-bottom:8px}.gen-agent{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:var(--accent);letter-spacing:2px}.gen-progress{width:300px;height:3px;background:var(--border);border-radius:2px;margin-top:24px;overflow:hidden}.gen-progress-bar{height:100%;background:var(--accent);border-radius:2px;width:0%;transition:width .5s ease}
+.result-modal{display:none;position:fixed;inset:0;z-index:300;background:rgba(10,10,15,.95);backdrop-filter:blur(20px);overflow-y:auto;padding:60px 48px}.result-modal.active{display:block}.result-close{position:fixed;top:24px;right:36px;width:44px;height:44px;border:1px solid var(--border);border-radius:50%;background:var(--bg-card);color:var(--text-primary);font-size:1.2rem;cursor:pointer;z-index:310;display:flex;align-items:center;justify-content:center;transition:all .2s}.result-close:hover{border-color:var(--accent);color:var(--accent)}.result-content{max-width:800px;margin:0 auto}.result-content h2{font-family:'Bebas Neue',sans-serif;font-size:2.4rem;letter-spacing:2px;margin-bottom:8px}.result-content .result-topic{color:var(--accent);font-size:1rem;margin-bottom:32px}.result-tabs{display:flex;gap:4px;margin-bottom:24px}.result-tab{padding:10px 20px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text-muted);font-size:.85rem;cursor:pointer;transition:all .2s;font-family:inherit;font-weight:600}.result-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}.result-tab:hover:not(.active){border-color:#444;color:var(--text-primary)}.result-output{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:24px;white-space:pre-wrap;word-wrap:break-word;font-size:.88rem;line-height:1.7;color:var(--text-secondary);max-height:600px;overflow-y:auto}.result-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}.metric-box{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:18px;text-align:center}.metric-val{font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--accent);letter-spacing:1px}.metric-label{font-size:.7rem;color:var(--text-muted);letter-spacing:.5px;text-transform:uppercase;margin-top:4px}
+.empty-state{text-align:center;padding:80px 20px}.empty-state .icon{font-size:3rem;margin-bottom:16px;opacity:.3}.empty-state p{color:var(--text-muted);font-size:1rem}
+@media(max-width:768px){.topnav,.section-header,.scroll-row,.load-more-container{padding-left:20px;padding-right:20px}.hero{padding:120px 20px 40px}.hero h1{font-size:2.6rem}.topic-card{flex:0 0 280px;min-height:240px}.manual-input{flex-direction:column;padding:12px}.manual-input input{width:100%;padding:10px 0}.result-modal{padding:60px 20px}.result-metrics{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
-
-<nav class="topnav" id="topnav">
-  <a href="/" class="logo">AJ<span>ENGINE</span></a>
-  <div class="nav-links">
-    <a href="/" class="active">Discover</a>
-    <a href="/dashboard">Campaigns</a>
-    <a href="/api/health">System</a>
-  </div>
-</nav>
-
-<section class="hero">
-  <div class="hero-content">
-    <div class="hero-badge"><span class="dot"></span> LIVE — AI NEWS FEED</div>
-    <h1>DISCOVER. <span class="red">GENERATE.</span> PUBLISH.</h1>
-    <p>Trending AI news delivered to your feed. Pick a story. One click launches 6 AI agents to turn it into a full content campaign across 10+ platforms.</p>
-    <div class="manual-input">
-      <input type="text" id="manualTopic" placeholder="Or type your own topic...">
-      <button class="btn-generate" onclick="generateFromInput()">Generate →</button>
-    </div>
-  </div>
-</section>
-
+<nav class="topnav" id="topnav"><a href="/" class="logo">AJ<span>ENGINE</span></a><div class="nav-links"><a href="/" class="active">Discover</a><a href="/dashboard">Campaigns</a><a href="/api/health">System</a></div></nav>
+<section class="hero"><div class="hero-content">
+<div class="hero-badge"><span class="dot"></span> LIVE — 7 SOURCES · AI NEWS FEED</div>
+<h1>DISCOVER. <span class="red">GENERATE.</span> PUBLISH.</h1>
+<p>AI news from Google, Reddit, HackerNews, Product Hunt, ArXiv, Twitter/X, and 10 RSS blogs — all in one feed. Pick a story. One click launches 6 AI agents to create a full content campaign.</p>
+<div class="manual-input"><input type="text" id="manualTopic" placeholder="Or type your own topic..."><button class="btn-generate" onclick="generateFromInput()">Generate →</button></div>
+</div></section>
 <div id="feedContainer"></div>
-
-<div class="load-more-container">
-  <button class="btn-load-more" id="loadMoreBtn" onclick="loadMore()">Load More Trending Topics</button>
-</div>
-
-<div class="generating-overlay" id="genOverlay">
-  <div class="gen-spinner"></div>
-  <div class="gen-text">Agents are working on your campaign</div>
-  <div class="gen-agent" id="genAgent">RESEARCH AGENT</div>
-  <div class="gen-progress"><div class="gen-progress-bar" id="genBar"></div></div>
-</div>
-
-<div class="result-modal" id="resultModal">
-  <button class="result-close" onclick="closeResult()">✕</button>
-  <div class="result-content">
-    <h2>CAMPAIGN COMPLETE</h2>
-    <div class="result-topic" id="resultTopic"></div>
-    <div class="result-metrics" id="resultMetrics"></div>
-    <div class="result-tabs" id="resultTabs"></div>
-    <div class="result-output" id="resultOutput"></div>
-  </div>
-</div>
-
+<div class="load-more-container"><button class="btn-load-more" id="loadMoreBtn" onclick="loadMore()">Load More Trending Topics</button></div>
+<div class="generating-overlay" id="genOverlay"><div class="gen-spinner"></div><div class="gen-text">Agents are working on your campaign</div><div class="gen-agent" id="genAgent">RESEARCH AGENT</div><div class="gen-progress"><div class="gen-progress-bar" id="genBar"></div></div></div>
+<div class="result-modal" id="resultModal"><button class="result-close" onclick="closeResult()">✕</button><div class="result-content"><h2>CAMPAIGN COMPLETE</h2><div class="result-topic" id="resultTopic"></div><div class="result-metrics" id="resultMetrics"></div><div class="result-tabs" id="resultTabs"></div><div class="result-output" id="resultOutput"></div></div></div>
 <script>
-let page = 0;
-let loading = false;
-const CATEGORIES = [
-  { key:'breaking', title:'BREAKING IN AI', icon:'⚡', sources:['serper'] },
-  { key:'tools', title:'NEW AI TOOLS & LAUNCHES', icon:'🛠️', sources:['serper'] },
-  { key:'research', title:'AI RESEARCH & PAPERS', icon:'🧪', sources:['hackernews','reddit'] },
-  { key:'startups', title:'AI STARTUPS & FUNDING', icon:'🚀', sources:['serper'] },
-  { key:'community', title:'TRENDING IN COMMUNITY', icon:'🔥', sources:['reddit','hackernews'] },
-];
-
-window.addEventListener('scroll', () => {
-  document.getElementById('topnav').classList.toggle('scrolled', window.scrollY > 40);
-});
-
-document.addEventListener('DOMContentLoaded', () => { showSkeletons(); loadTrending(); });
-
-function showSkeletons() {
-  const container = document.getElementById('feedContainer');
-  container.innerHTML = CATEGORIES.map(cat => `
-    <div class="feed-section">
-      <div class="section-header">
-        <div class="section-title"><span class="icon">${cat.icon}</span> ${cat.title}</div>
-      </div>
-      <div class="scroll-row">${Array(5).fill('<div class="skeleton skeleton-card"></div>').join('')}</div>
-    </div>
-  `).join('');
-}
-
-async function loadTrending() {
-  loading = true;
-  try {
-    const resp = await fetch('/api/trending?page=' + page);
-    const data = await resp.json();
-    renderFeed(data);
-    page++;
-  } catch(e) { console.error('Feed error:', e); showFallback(); }
-  loading = false;
-}
-
-async function loadMore() {
-  if (loading) return;
-  const btn = document.getElementById('loadMoreBtn');
-  btn.textContent = 'Loading...'; btn.style.pointerEvents = 'none';
-  await loadTrending();
-  btn.textContent = 'Load More Trending Topics'; btn.style.pointerEvents = 'auto';
-}
-
-function renderFeed(data) {
-  const container = document.getElementById('feedContainer');
-  if (page === 0) container.innerHTML = '';
-  const categorized = {};
-  CATEGORIES.forEach(c => categorized[c.key] = []);
-  (data.topics || []).forEach(t => {
-    const cat = t.category || 'breaking';
-    if (categorized[cat]) categorized[cat].push(t);
-    else categorized['breaking'].push(t);
-  });
-  CATEGORIES.forEach(cat => {
-    const topics = categorized[cat.key];
-    if (!topics.length) return;
-    const section = document.createElement('div');
-    section.className = 'feed-section';
-    section.innerHTML = `
-      <div class="section-header">
-        <div class="section-title"><span class="icon">${cat.icon}</span> ${cat.title} <span class="count">${topics.length} stories</span></div>
-      </div>
-      <div class="scroll-row">${topics.map((t, i) => renderCard(t, i)).join('')}</div>
-    `;
-    container.appendChild(section);
-  });
-}
-
-function renderCard(topic, idx) {
-  const sourceClass = {serper:'source-serper',reddit:'source-reddit',hackernews:'source-hackernews',rss:'source-rss'}[topic.source] || 'source-serper';
-  const icons = {serper:'🔍',reddit:'🤖',hackernews:'📰',rss:'📡'};
-  const emoji = icons[topic.source] || '📰';
-  const pEmojis = ['🤖','🧠','⚡','🔮','💡','🛠️','🚀','🔬'];
-  const pEmoji = pEmojis[idx % pEmojis.length];
-  return `
-    <div class="topic-card" style="animation:fadeSlide .4s ease ${idx * .06}s both">
-      <div class="card-image">
-        ${topic.image ? `<img src="${topic.image}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=placeholder>${pEmoji}</div>'">` : `<div class="placeholder">${pEmoji}</div>`}
-        <div class="card-gradient"></div>
-        <div class="card-source-badge ${sourceClass}">${emoji} ${topic.source || 'web'}</div>
-        ${topic.score ? `<div class="card-score">▲ ${topic.score}</div>` : ''}
-      </div>
-      <div class="card-body">
-        <div class="card-title">${escHtml(topic.title)}</div>
-        <div class="card-meta"><span>${topic.time_ago || 'Recent'}</span>${topic.subreddit ? `<span>r/${topic.subreddit}</span>` : ''}</div>
-        <div class="card-why">${escHtml(topic.why_trending || topic.snippet || '')}</div>
-        <div class="card-actions">
-          <button class="btn-card btn-campaign" onclick="event.stopPropagation();generate('${escAttr(topic.title)}')">⚡ Generate</button>
-          <button class="btn-card btn-preview" onclick="event.stopPropagation();window.open('${topic.url || '#'}','_blank')">↗ Source</button>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function showFallback() {
-  document.getElementById('feedContainer').innerHTML = `<div class="empty-state"><div class="icon">📡</div><p>Could not load trending topics. Use the search bar above to generate a campaign manually.</p></div>`;
-}
-
-async function generate(topic) {
-  if (!topic) return;
-  const overlay = document.getElementById('genOverlay'), agentEl = document.getElementById('genAgent'), bar = document.getElementById('genBar');
-  overlay.classList.add('active'); document.body.style.overflow = 'hidden';
-  const agents = [{name:'RESEARCH AGENT',pct:15},{name:'WRITER AGENT',pct:35},{name:'REPURPOSER AGENT',pct:55},{name:'VISUAL AGENT',pct:72},{name:'PUBLISHER AGENT',pct:88},{name:'ANALYTICS AGENT',pct:95}];
-  let step = 0;
-  const iv = setInterval(() => { if(step<agents.length){agentEl.textContent=agents[step].name;bar.style.width=agents[step].pct+'%';step++} }, 10000);
-  try {
-    const resp = await fetch('/api/campaign/generate', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic})});
-    const data = await resp.json(); clearInterval(iv); bar.style.width='100%';
-    setTimeout(() => { overlay.classList.remove('active'); document.body.style.overflow=''; bar.style.width='0%'; showResult(data); }, 500);
-  } catch(e) { clearInterval(iv); overlay.classList.remove('active'); document.body.style.overflow=''; bar.style.width='0%'; alert('Generation failed: '+e.message); }
-}
-
-function generateFromInput() {
-  const topic = document.getElementById('manualTopic').value.trim();
-  if (!topic) { document.getElementById('manualTopic').focus(); return; }
-  generate(topic);
-}
-
-function showResult(data) {
-  const modal = document.getElementById('resultModal');
-  document.getElementById('resultTopic').textContent = data.topic || data.result?.topic || '';
-  const m = data.result?.metrics || {};
-  document.getElementById('resultMetrics').innerHTML = `
-    <div class="metric-box"><div class="metric-val">${m.total_agents||'?'}</div><div class="metric-label">Agents</div></div>
-    <div class="metric-box"><div class="metric-val">${m.total_tasks||'?'}</div><div class="metric-label">Tasks</div></div>
-    <div class="metric-box"><div class="metric-val">${m.latency_seconds||'?'}s</div><div class="metric-label">Time</div></div>
-    <div class="metric-box"><div class="metric-val">8</div><div class="metric-label">Platforms</div></div>
-  `;
-  const outputs = data.result?.task_outputs || [];
-  document.getElementById('resultTabs').innerHTML = outputs.map((o,i) => `<button class="result-tab ${i===0?'active':''}" onclick="switchTab(${i})">${o.agent}</button>`).join('');
-  window._resultOutputs = outputs;
-  if (outputs.length) document.getElementById('resultOutput').textContent = outputs[0].output || 'N/A';
-  modal.classList.add('active'); document.body.style.overflow = 'hidden';
-}
-
-function switchTab(idx) {
-  document.querySelectorAll('.result-tab').forEach((t,i) => t.classList.toggle('active', i===idx));
-  document.getElementById('resultOutput').textContent = window._resultOutputs[idx]?.output || 'N/A';
-}
-
-function closeResult() { document.getElementById('resultModal').classList.remove('active'); document.body.style.overflow = ''; }
-
-function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function escAttr(s) { return (s||'').replace(/'/g,"\\'").replace(/"/g,'\\"'); }
-
-document.addEventListener('keydown', e => { if(e.key==='Escape')closeResult(); if(e.key==='Enter'&&document.activeElement?.id==='manualTopic')generateFromInput(); });
-
-const style = document.createElement('style');
-style.textContent = `@keyframes fadeSlide{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}`;
-document.head.appendChild(style);
+let page=0,loading=false;
+const CATEGORIES=[{key:'breaking',title:'BREAKING IN AI',icon:'⚡'},{key:'tools',title:'NEW AI TOOLS & LAUNCHES',icon:'🛠️'},{key:'research',title:'AI RESEARCH & PAPERS',icon:'🧪'},{key:'startups',title:'AI STARTUPS & FUNDING',icon:'🚀'},{key:'community',title:'TRENDING IN COMMUNITY',icon:'🔥'}];
+window.addEventListener('scroll',()=>{document.getElementById('topnav').classList.toggle('scrolled',window.scrollY>40)});
+document.addEventListener('DOMContentLoaded',()=>{showSkeletons();loadTrending()});
+function showSkeletons(){document.getElementById('feedContainer').innerHTML=CATEGORIES.map(c=>`<div class="feed-section"><div class="section-header"><div class="section-title"><span class="icon">${c.icon}</span> ${c.title}</div></div><div class="scroll-row">${Array(5).fill('<div class="skeleton skeleton-card"></div>').join('')}</div></div>`).join('')}
+async function loadTrending(){loading=true;try{const r=await fetch('/api/trending?page='+page);const d=await r.json();renderFeed(d);page++}catch(e){console.error('Feed error:',e);showFallback()}loading=false}
+async function loadMore(){if(loading)return;const b=document.getElementById('loadMoreBtn');b.textContent='Loading...';b.style.pointerEvents='none';await loadTrending();b.textContent='Load More Trending Topics';b.style.pointerEvents='auto'}
+function renderFeed(data){const c=document.getElementById('feedContainer');if(page===0)c.innerHTML='';const cat={};CATEGORIES.forEach(x=>cat[x.key]=[]);(data.topics||[]).forEach(t=>{const k=t.category||'breaking';if(cat[k])cat[k].push(t);else cat['breaking'].push(t)});CATEGORIES.forEach(x=>{const topics=cat[x.key];if(!topics.length)return;const s=document.createElement('div');s.className='feed-section';s.innerHTML=`<div class="section-header"><div class="section-title"><span class="icon">${x.icon}</span> ${x.title} <span class="count">${topics.length} stories</span></div></div><div class="scroll-row">${topics.map((t,i)=>renderCard(t,i)).join('')}</div>`;c.appendChild(s)})}
+function renderCard(topic,idx){const sc={serper:'source-serper',reddit:'source-reddit',hackernews:'source-hackernews',rss:'source-rss',twitter:'source-twitter',producthunt:'source-producthunt',arxiv:'source-arxiv'}[topic.source]||'source-serper';const ic={serper:'🔍',reddit:'🤖',hackernews:'📰',rss:'📡',twitter:'🐦',producthunt:'🚀',arxiv:'📄'};const em=ic[topic.source]||'📰';const pe=['🤖','🧠','⚡','🔮','💡','🛠️','🚀','🔬'][idx%8];return`<div class="topic-card" style="animation:fadeSlide .4s ease ${idx*.06}s both"><div class="card-image">${topic.image?`<img src="${topic.image}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=placeholder>${pe}</div>'">`:`<div class="placeholder">${pe}</div>`}<div class="card-gradient"></div><div class="card-source-badge ${sc}">${em} ${topic.source_name||topic.source||'web'}</div>${topic.score?`<div class="card-score">▲ ${topic.score}</div>`:''}</div><div class="card-body"><div class="card-title">${escHtml(topic.title)}</div><div class="card-meta"><span>${topic.time_ago||'Recent'}</span>${topic.subreddit?`<span>r/${topic.subreddit}</span>`:''}</div><div class="card-why">${escHtml(topic.why_trending||topic.snippet||'')}</div><div class="card-actions"><button class="btn-card btn-campaign" onclick="event.stopPropagation();generate('${escAttr(topic.title)}')">⚡ Generate</button><button class="btn-card btn-preview" onclick="event.stopPropagation();window.open('${topic.url||'#'}','_blank')">↗ Source</button></div></div></div>`}
+function showFallback(){document.getElementById('feedContainer').innerHTML=`<div class="empty-state"><div class="icon">📡</div><p>Could not load trending topics. Use the search bar above to generate a campaign manually.</p></div>`}
+async function generate(topic){if(!topic)return;const o=document.getElementById('genOverlay'),a=document.getElementById('genAgent'),b=document.getElementById('genBar');o.classList.add('active');document.body.style.overflow='hidden';const agents=[{n:'RESEARCH AGENT',p:15},{n:'WRITER AGENT',p:35},{n:'REPURPOSER AGENT',p:55},{n:'VISUAL AGENT',p:72},{n:'PUBLISHER AGENT',p:88},{n:'ANALYTICS AGENT',p:95}];let s=0;const iv=setInterval(()=>{if(s<agents.length){a.textContent=agents[s].n;b.style.width=agents[s].p+'%';s++}},10000);try{const r=await fetch('/api/campaign/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic})});const d=await r.json();clearInterval(iv);b.style.width='100%';setTimeout(()=>{o.classList.remove('active');document.body.style.overflow='';b.style.width='0%';showResult(d)},500)}catch(e){clearInterval(iv);o.classList.remove('active');document.body.style.overflow='';b.style.width='0%';alert('Generation failed: '+e.message)}}
+function generateFromInput(){const t=document.getElementById('manualTopic').value.trim();if(!t){document.getElementById('manualTopic').focus();return}generate(t)}
+function showResult(data){const m=document.getElementById('resultModal');document.getElementById('resultTopic').textContent=data.topic||data.result?.topic||'';const mt=data.result?.metrics||{};document.getElementById('resultMetrics').innerHTML=`<div class="metric-box"><div class="metric-val">${mt.total_agents||'?'}</div><div class="metric-label">Agents</div></div><div class="metric-box"><div class="metric-val">${mt.total_tasks||'?'}</div><div class="metric-label">Tasks</div></div><div class="metric-box"><div class="metric-val">${mt.latency_seconds||'?'}s</div><div class="metric-label">Time</div></div><div class="metric-box"><div class="metric-val">8</div><div class="metric-label">Platforms</div></div>`;const o=data.result?.task_outputs||[];document.getElementById('resultTabs').innerHTML=o.map((x,i)=>`<button class="result-tab ${i===0?'active':''}" onclick="switchTab(${i})">${x.agent}</button>`).join('');window._ro=o;if(o.length)document.getElementById('resultOutput').textContent=o[0].output||'N/A';m.classList.add('active');document.body.style.overflow='hidden'}
+function switchTab(i){document.querySelectorAll('.result-tab').forEach((t,j)=>t.classList.toggle('active',j===i));document.getElementById('resultOutput').textContent=window._ro[i]?.output||'N/A'}
+function closeResult(){document.getElementById('resultModal').classList.remove('active');document.body.style.overflow=''}
+function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function escAttr(s){return(s||'').replace(/'/g,"\\'").replace(/"/g,'\\"')}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeResult();if(e.key==='Enter'&&document.activeElement?.id==='manualTopic')generateFromInput()});
+const st=document.createElement('style');st.textContent='@keyframes fadeSlide{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}';document.head.appendChild(st);
 </script>
 </body>
 </html>

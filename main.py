@@ -1,4 +1,4 @@
-"""AJ Content Engine — FastAPI Server + Dashboard"""
+"""AJ Content Engine — FastAPI Server + Netflix-Style Trending Feed + Dashboard"""
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -6,8 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import os, uvicorn
 from datetime import datetime
 from crew import ContentEngineCrew
+from tools.trending_fetcher import fetch_all_trending
 
-app = FastAPI(title="AJ Content Engine", description="Multi-Agent Autonomous Content Production System", version="1.0.0")
+app = FastAPI(title="AJ Content Engine", description="Multi-Agent Autonomous Content Production System", version="2.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 templates = Jinja2Templates(directory="templates")
 campaigns = []
@@ -19,6 +20,15 @@ async def home(request: Request):
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
     return templates.TemplateResponse("dashboard.html", {"request": request, "campaigns": campaigns, "total_campaigns": len(campaigns)})
+
+@app.get("/api/trending")
+async def get_trending(page: int = 0):
+    """Fetch trending AI/tech topics from Serper, Reddit, HackerNews."""
+    try:
+        data = await fetch_all_trending(page=page)
+        return JSONResponse(data)
+    except Exception as e:
+        return JSONResponse({"error": str(e), "topics": [], "total": 0, "page": page, "has_more": False}, status_code=500)
 
 @app.post("/api/campaign/generate")
 async def generate_campaign(request: Request):
@@ -65,7 +75,8 @@ async def list_campaigns():
 
 @app.get("/api/health")
 async def health():
-    return {"status": "healthy", "app": "AJ Content Engine", "version": "1.0.0", "agents": 6,
+    return {"status": "healthy", "app": "AJ Content Engine", "version": "2.0.0", "agents": 6,
+        "features": ["trending_feed", "one_click_generate", "multi_agent_pipeline"],
         "keys": {k: bool(os.getenv(v)) for k, v in {"anthropic": "ANTHROPIC_API_KEY", "serper": "SERPER_API_KEY", "gemini": "GEMINI_API_KEY", "twitter": "TWITTER_API_KEY", "linkedin": "LINKEDIN_ACCESS_TOKEN", "bluesky": "BLUESKY_HANDLE", "reddit": "REDDIT_CLIENT_ID", "telegram": "TELEGRAM_BOT_TOKEN", "sendgrid": "SENDGRID_API_KEY"}.items()}}
 
 if __name__ == "__main__":

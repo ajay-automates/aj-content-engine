@@ -1,4 +1,4 @@
-"""AJ Content Engine — FastAPI Server + Netflix-Style Trending Feed + Video Research + Dashboard"""
+"""AJ Content Engine — FastAPI Server + Trending Feed + Video Research + Shorts Rewriter + Dashboard"""
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -8,8 +8,9 @@ from datetime import datetime
 from crew import ContentEngineCrew
 from tools.trending_fetcher import fetch_all_trending
 from tools.video_researcher import search_videos, select_and_host_video
+from tools.shorts_rewriter import rewrite_for_shorts
 
-app = FastAPI(title="AJ Content Engine", description="Multi-Agent Autonomous Content Production System", version="3.0.0")
+app = FastAPI(title="AJ Content Engine", description="Multi-Agent Autonomous Content Production System", version="3.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 templates = Jinja2Templates(directory="templates")
 campaigns = []
@@ -30,6 +31,34 @@ async def get_trending(page: int = 0):
         return JSONResponse(data)
     except Exception as e:
         return JSONResponse({"error": str(e), "topics": [], "total": 0, "page": page, "has_more": False}, status_code=500)
+
+# ─── SHORTS REWRITER ENDPOINT ─────────────────────────────────────
+@app.post("/api/shorts/generate")
+async def generate_shorts_ideas(request: Request):
+    """Take trending topics and rewrite them into viral YouTube Shorts titles."""
+    try:
+        body = await request.json()
+        topics = body.get("topics", [])
+        max_topics = min(body.get("max_topics", 12), 20)
+        if not topics:
+            # If no topics provided, fetch fresh trending topics
+            data = await fetch_all_trending(page=0)
+            topics = data.get("topics", [])
+        shorts = await rewrite_for_shorts(topics, max_topics=max_topics)
+        return JSONResponse({"shorts": shorts, "count": len(shorts)})
+    except Exception as e:
+        return JSONResponse({"error": str(e), "shorts": []}, status_code=500)
+
+@app.get("/api/shorts/generate")
+async def generate_shorts_ideas_get():
+    """GET version — fetch trending + rewrite into Shorts titles in one call."""
+    try:
+        data = await fetch_all_trending(page=0)
+        topics = data.get("topics", [])
+        shorts = await rewrite_for_shorts(topics, max_topics=12)
+        return JSONResponse({"shorts": shorts, "count": len(shorts)})
+    except Exception as e:
+        return JSONResponse({"error": str(e), "shorts": []}, status_code=500)
 
 # ─── VIDEO RESEARCH ENDPOINTS ─────────────────────────────────────
 @app.post("/api/videos/search")
@@ -105,8 +134,8 @@ async def list_campaigns():
 
 @app.get("/api/health")
 async def health():
-    return {"status": "healthy", "app": "AJ Content Engine", "version": "3.0.0", "agents": 6,
-        "features": ["trending_feed", "one_click_generate", "multi_agent_pipeline", "video_research"],
+    return {"status": "healthy", "app": "AJ Content Engine", "version": "3.1.0", "agents": 6,
+        "features": ["trending_feed", "one_click_generate", "multi_agent_pipeline", "video_research", "shorts_rewriter"],
         "keys": {k: bool(os.getenv(v)) for k, v in {"anthropic": "ANTHROPIC_API_KEY", "serper": "SERPER_API_KEY", "gemini": "GEMINI_API_KEY", "twitter": "TWITTER_API_KEY", "linkedin": "LINKEDIN_ACCESS_TOKEN", "bluesky": "BLUESKY_HANDLE", "reddit": "REDDIT_CLIENT_ID", "telegram": "TELEGRAM_BOT_TOKEN", "sendgrid": "SENDGRID_API_KEY", "supabase": "SUPABASE_URL"}.items()}}
 
 if __name__ == "__main__":

@@ -228,28 +228,32 @@ async def download_video(url: str, max_duration: int = MAX_VIDEO_DURATION) -> Op
 
     cmd = [
         "yt-dlp",
-        "--format", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
+        # Use iOS player client — bypasses YouTube bot detection on server IPs
+        "--extractor-args", "youtube:player_client=ios,web",
+        # Simplified format selector: prefer mp4 ≤720p, fall back to anything
+        "--format", "best[height<=720][ext=mp4]/best[height<=720]/best",
         "--merge-output-format", "mp4",
         "--max-filesize", f"{MAX_VIDEO_SIZE_MB}M",
         "--socket-timeout", "30",
         "--no-playlist",
         "--no-warnings",
+        "--no-check-certificates",
+        "--geo-bypass",
+        "--add-header", "Accept-Language:en-US,en;q=0.9",
         "--output", output_template,
     ]
-    if max_duration:
-        cmd.extend(["--match-filter", f"duration<={max_duration}"])
     cmd.append(url)
 
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=180)
 
         if proc.returncode != 0:
-            err_msg = stderr.decode()[:500]
+            err_msg = stderr.decode()[:800]
             logger.error("yt-dlp download failed (code %d): %s", proc.returncode, err_msg)
-            return None
+            return {"_error": err_msg}  # Return error details for caller
 
         # Find the downloaded file
         downloaded = None
@@ -331,7 +335,19 @@ async def select_and_host_video(video_url: str) -> dict:
 
     dl = await download_video(video_url)
     if not dl:
-        result["error"] = "Download failed — video may be too long, too large, or geo-restricted."
+        result["error"] = "Download failed — yt-dlp returned no output. Check server logs."
+        return result
+    if "_error" in dl:
+        # Surface the actual yt-dlp error message
+        raw_err = dl["_error"]
+        if "Sign in" in raw_err or "bot" in raw_err.lower():
+            result["error"] = "YouTube blocked the download (bot detection). Try a different video or a direct MP4 URL."
+        elif "This video is not available" in raw_err or "unavailable" in raw_err.lower():
+            result["error"] = "Video is unavailable or geo-restricted in the server's region."
+        elif "File is larger" in raw_err or "filesize" in raw_err.lower():
+            result["error"] = f"Video exceeds {MAX_VIDEO_SIZE_MB}MB size limit."
+        else:
+            result["error"] = f"Download failed: {raw_err[:300]}"
         return result
 
     result["local_file"] = dl["filename"]

@@ -1,11 +1,7 @@
 """AJ Content Engine — Video Research & Download Module
-Uses yt-dlp for YouTube search + multi-platform download,
-Serper API to find official demo/promo videos,
-Supabase Storage for permanent video hosting.
-
-SMART SEARCH: Prioritizes screen recordings, demos, tutorials, and official
-product clips over news coverage. Filters out TV news channels (CNN, CNBC, etc.)
-to surface usable B-roll content for Shorts creation.
+Primary source: Pexels API (royalty-free stock B-roll, direct download)
+Secondary: YouTube search (discovery only — downloads blocked by YouTube)
+Upload: Supabase Storage for permanent hosting.
 """
 import os
 import re
@@ -24,6 +20,7 @@ logger = logging.getLogger("video_researcher")
 
 # ─── CONFIG ───────────────────────────────────────────────────────
 SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
+PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 SUPABASE_BUCKET = os.getenv("SUPABASE_VIDEO_BUCKET", "videos")
@@ -57,6 +54,60 @@ DEMO_SUFFIXES = [
     "screen recording how to use",
     "official announcement",
 ]
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  0. PEXELS VIDEO SEARCH (primary downloadable source)
+# ═══════════════════════════════════════════════════════════════════
+async def search_pexels_videos(query: str, max_results: int = 6) -> list[dict]:
+    """Search Pexels for royalty-free stock B-roll videos.
+    Pexels videos have direct download URLs — no yt-dlp or PO tokens needed."""
+    if not PEXELS_API_KEY:
+        logger.warning("PEXELS_API_KEY not set — skipping Pexels video search")
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                "https://api.pexels.com/videos/search",
+                headers={"Authorization": PEXELS_API_KEY},
+                params={"query": query, "per_page": max_results, "orientation": "landscape"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        results = []
+        for v in data.get("videos", []):
+            # Pick best video file ≤1080p
+            files = sorted(v.get("video_files", []), key=lambda f: f.get("width", 0), reverse=True)
+            best = next((f for f in files if f.get("width", 0) <= 1920 and f.get("file_type") == "video/mp4"), None)
+            if not best:
+                best = next((f for f in files if f.get("file_type") == "video/mp4"), None)
+            if not best:
+                continue
+            duration = v.get("duration", 0)
+            user = v.get("user", {})
+            results.append({
+                "id": str(uuid.uuid4())[:8],
+                "source": "pexels",
+                "platform": "Pexels",
+                "video_id": str(v.get("id", "")),
+                "title": v.get("url", "").split("/")[-2].replace("-", " ").title() or "Stock Video",
+                "url": v.get("url", ""),           # Pexels page URL
+                "download_url": best.get("link", ""),  # Direct MP4 URL
+                "thumbnail": v.get("image", ""),
+                "duration": duration,
+                "duration_str": f"{duration//60}:{duration%60:02d}" if duration else "?",
+                "channel": f"{user.get('name', 'Pexels')} (Pexels)",
+                "views": 0,
+                "views_str": "Royalty-free",
+                "upload_date": "",
+                "description": f"By {user.get('name', 'Pexels')} — royalty-free stock video",
+                "downloadable": True,  # Mark as directly downloadable
+            })
+        return results
+    except Exception as e:
+        logger.error("Pexels search error: %s", e)
+        return []
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -168,15 +219,12 @@ async def search_videos(topic: str, max_results: int = 5) -> list[dict]:
     # Extract the core subject for smarter queries
     core_topic = _extract_core_subject(topic)
 
-    # Strategy 1: Direct topic + "demo" (finds product demos)
-    # Strategy 2: Core subject + "tutorial walkthrough" (finds screen recordings)
-    # Strategy 3: Core subject + "official announcement" (finds launch clips)
-    # Strategy 4: Serper with demo focus
+    # Pexels first (downloadable stock B-roll), then YouTube/Serper for discovery
     tasks = [
-        search_youtube(f"{core_topic} demo", max_results=4),
-        search_youtube(f"{core_topic} tutorial walkthrough", max_results=3),
-        search_youtube(f"{core_topic} official announcement", max_results=3),
-        search_serper_videos(f"{core_topic} demo tutorial screen recording", max_results=4),
+        search_pexels_videos(core_topic, max_results=4),          # Stock B-roll (downloadable)
+        search_youtube(f"{core_topic} demo", max_results=3),
+        search_youtube(f"{core_topic} tutorial walkthrough", max_results=2),
+        search_serper_videos(f"{core_topic} demo screen recording", max_results=3),
     ]
 
     raw_results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -329,25 +377,60 @@ async def upload_to_supabase(filepath: str, filename: str = None) -> Optional[st
 # ═══════════════════════════════════════════════════════════════════
 #  6. FULL PIPELINE: Search → Pick → Download → Upload
 # ═══════════════════════════════════════════════════════════════════
-async def select_and_host_video(video_url: str) -> dict:
-    """Download a selected video and upload to Supabase for permanent hosting."""
-    result = {"status": "error", "url": None, "supabase_url": None, "error": None}
+async def download_direct_mp4(url: str) -> Optional[dict]:
+    """Download a direct MP4 URL via httpx (no yt-dlp). Used for Pexels."""
+    tmp_dir = tempfile.mkdtemp(prefix="ajvideo_")
+    filename = f"{uuid.uuid4().hex[:8]}.mp4"
+    filepath = os.path.join(tmp_dir, filename)
+    try:
+        async with httpx.AsyncClient(timeout=180, follow_redirects=True) as client:
+            async with client.stream("GET", url) as resp:
+                resp.raise_for_status()
+                with open(filepath, "wb") as f:
+                    async for chunk in resp.aiter_bytes(chunk_size=1024 * 64):
+                        f.write(chunk)
+        size_mb = os.path.getsize(filepath) / (1024 * 1024)
+        if size_mb > MAX_VIDEO_SIZE_MB:
+            return {"_error": f"File is {size_mb:.1f}MB, exceeds {MAX_VIDEO_SIZE_MB}MB limit."}
+        return {"filepath": filepath, "filename": filename, "size_mb": round(size_mb, 2), "tmp_dir": tmp_dir}
+    except Exception as e:
+        logger.error("Direct MP4 download error: %s", e)
+        return None
 
-    dl = await download_video(video_url)
+
+async def select_and_host_video(video_url: str, download_url: str = "") -> dict:
+    """Download a selected video and upload to Supabase for permanent hosting.
+
+    Routing logic:
+    - YouTube URLs → blocked (YouTube now requires browser auth for server downloads)
+    - Pexels/direct MP4 URLs (download_url) → direct httpx download
+    - Other platforms → yt-dlp attempt
+    """
+    result = {"status": "error", "url": video_url, "supabase_url": None, "error": None}
+
+    # ── YouTube: blocked by PO token requirement ──
+    is_youtube = any(x in video_url for x in ["youtube.com", "youtu.be"])
+    if is_youtube:
+        result["error"] = (
+            "YouTube videos cannot be downloaded from a server — YouTube requires browser "
+            "authentication (PO tokens) that only work in a real browser. "
+            "Use the 'Source' button to open on YouTube, or select a Pexels stock video instead."
+        )
+        return result
+
+    # ── Pexels or other direct MP4 URL ──
+    effective_url = download_url if download_url else video_url
+    is_direct_mp4 = effective_url.endswith(".mp4") or "pexels.com/video-files" in effective_url or download_url
+    if is_direct_mp4:
+        dl = await download_direct_mp4(effective_url)
+    else:
+        dl = await download_video(effective_url)
+
     if not dl:
-        result["error"] = "Download failed — yt-dlp returned no output. Check server logs."
+        result["error"] = "Download failed — no output from downloader. Check server logs."
         return result
     if "_error" in dl:
-        # Surface the actual yt-dlp error message
-        raw_err = dl["_error"]
-        if "Sign in" in raw_err or "bot" in raw_err.lower():
-            result["error"] = "YouTube blocked the download (bot detection). Try a different video or a direct MP4 URL."
-        elif "This video is not available" in raw_err or "unavailable" in raw_err.lower():
-            result["error"] = "Video is unavailable or geo-restricted in the server's region."
-        elif "File is larger" in raw_err or "filesize" in raw_err.lower():
-            result["error"] = f"Video exceeds {MAX_VIDEO_SIZE_MB}MB size limit."
-        else:
-            result["error"] = f"Download failed: {raw_err[:300]}"
+        result["error"] = dl["_error"][:300]
         return result
 
     result["local_file"] = dl["filename"]
@@ -360,7 +443,7 @@ async def select_and_host_video(video_url: str) -> dict:
         result["supabase_url"] = public_url
     else:
         result["status"] = "downloaded"
-        result["error"] = "Upload to Supabase failed — check credentials. Video was downloaded successfully."
+        result["error"] = "Upload to Supabase failed — check credentials."
 
     # Cleanup temp file
     try:

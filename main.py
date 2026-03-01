@@ -211,9 +211,10 @@ async def video_select(request: Request):
     try:
         body = await request.json()
         video_url = body.get("url", "").strip()
+        download_url = body.get("download_url", "").strip()  # Direct MP4 for Pexels
         if not video_url:
             return JSONResponse({"error": "Video URL is required"}, status_code=400)
-        result = await select_and_host_video(video_url)
+        result = await select_and_host_video(video_url, download_url=download_url)
         return JSONResponse(result)
     except Exception as e:
         return JSONResponse({"error": str(e), "status": "error"}, status_code=500)
